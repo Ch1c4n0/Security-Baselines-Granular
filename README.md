@@ -21,291 +21,9 @@
 <br/>
 
 <!-- Language switcher -->
-**[ 🇧🇷 Clique aqui para Português ](#-documentação-em-português) &nbsp;|&nbsp; [ 🇺🇸 Click here for English ](#-english-documentation)**
+**[ 🇺🇸 Read in English ](#-english-documentation) &nbsp;|&nbsp; [ 🇧🇷 Ler em Português ](#-documentação-em-português)**
 
 </div>
-
----
-
-<br/>
-
-<!-- ████████████████████████████████████████████████████████████ -->
-<!--                   PORTUGUÊS                                   -->
-<!-- ████████████████████████████████████████████████████████████ -->
-
-## 🇧🇷 Documentação em Português
-
-<details open>
-<summary><strong>Expandir documentação em Português</strong></summary>
-
-<br/>
-
-### 📌 O que são Security Baselines no Intune?
-
-As **Security Baselines** (Linhas de Base de Segurança) do Microsoft Intune são conjuntos pré-configurados de definições de segurança recomendadas pela Microsoft para dispositivos Windows. Elas agrupam centenas de configurações de segurança em um único perfil, baseadas nas melhores práticas da equipe de segurança da Microsoft, do CIS (Center for Internet Security) e do NIST (National Institute of Standards and Technology).
-
-> **O que a Microsoft diz:**
-> *"Security baselines are pre-configured groups of Windows settings that help you apply and enforce granular security settings that the relevant security teams recommend. You can also customize each baseline you deploy to enforce only those settings and values you require."*
-> — [Microsoft Learn – Security baselines in Intune](https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines)
-
-#### Por que é tão importante configurar?
-
-| Motivo | Impacto |
-|--------|---------|
-| 🔒 **Redução de superfície de ataque** | Desativa funcionalidades desnecessárias e potencialmente exploráveis |
-| 🏛️ **Conformidade regulatória** | Auxilia no atendimento a LGPD, ISO 27001, NIST, CIS Benchmarks |
-| ⚡ **Velocidade de implantação** | Em vez de configurar centenas de GPOs manualmente, uma baseline cobre tudo |
-| 🧩 **Padronização** | Garante que todos os dispositivos do tenant sigam o mesmo padrão mínimo de segurança |
-| 🔁 **Atualizações da Microsoft** | A cada nova versão do Windows, a Microsoft publica uma nova baseline com as proteções mais recentes |
-| 🛡️ **Proteção contra ameaças comuns** | Habilita Defender Antivirus, configura Firewall, restringe execução de scripts, bloqueia protocolos inseguros |
-
-#### O que as baselines cobrem?
-
-As Security Baselines do Windows abrangem áreas como:
-
-- **Microsoft Defender Antivirus** — proteção em tempo real, varredura, quarentena
-- **Firewall do Windows** — regras para redes de domínio, privadas e públicas
-- **BitLocker** — criptografia de disco completo
-- **Windows Hello** — autenticação sem senha e biometria
-- **Auditoria e logs** — rastreamento de eventos de logon, alterações de conta, uso de privilégios
-- **Internet Explorer / Microsoft Edge** — hardening de navegador
-- **Credenciais e senhas** — complexidade, expiração, bloqueio de conta
-- **Controle de Conta de Usuário (UAC)** — elevação de privilégios
-- **Windows Update** — políticas de atualização automática
-
-> 💡 A Microsoft recomenda começar com as Security Baselines e depois ajustar as configurações conforme as necessidades específicas da organização, em vez de criar políticas do zero.
-
----
-
-### 📋 Visão Geral dos Scripts
-
-Este projeto fornece dois scripts PowerShell para exportar e importar Security Baselines do Microsoft Intune via **Microsoft Graph REST API** — sem necessidade do módulo Microsoft.Graph SDK. Isso resolve conflitos de versão de assembly MSAL comuns em ambientes com múltiplos módulos PowerShell instalados.
-
-**Funcionalidades:**
-- ✅ Autenticação por Device Code ou usuário/senha (ROPC)
-- ✅ Exporta por categoria (Defender, Firewall, Auditing, etc.)
-- ✅ Importa com seleção interativa via `Out-GridView`
-- ✅ Permite unir settings da mesma categoria em uma única política
-- ✅ Permite renomear cada política antes de importar
-- ✅ Suporte a atribuição automática de grupos
-- ✅ Logs detalhados na pasta do script
-
----
-
-### ⚙️ Pré-requisitos
-
-- PowerShell **7.0 ou superior**
-- Acesso ao **Microsoft Entra ID** para registrar um aplicativo
-- Conta com permissão **DeviceManagementConfiguration.ReadWrite.All** no tenant
-- Windows com acesso à internet
-
----
-
-### 🔐 Registro do Aplicativo no Entra ID
-
-É necessário registrar um aplicativo próprio no Entra ID para obter um `$clientId` e `$tenantId` a configurar nos scripts.
-
-> ⚠️ **Não use** o clientId genérico do *Microsoft Graph Command Line Tools* (`14d82eec-...`). Políticas de Conditional Access podem bloqueá-lo em dispositivos não gerenciados com o erro **530033**.
-
-#### Passo a passo
-
-**1. Criar o registro do app**
-```
-Entra ID → App registrations → New registration
-  Nome: Intune Baselines Script
-  Tipo de conta: Accounts in this organizational directory only (Single tenant)
-  Redirect URI: (deixar em branco)
-  → Register
-```
-
-**2. Habilitar Public Client (para Device Code funcionar)**
-```
-Authentication → Add a platform → Mobile and desktop applications
-  ✅ https://login.microsoftonline.com/common/oauth2/nativeclient
-
-Advanced settings:
-  Allow public client flows → Yes
-  → Save
-```
-
-**3. Adicionar permissão delegada**
-```
-API permissions → Add a permission → Microsoft Graph → Delegated permissions
-  Buscar e selecionar: DeviceManagementConfiguration.ReadWrite.All
-  → Add permissions
-
-→ Grant admin consent for [seu tenant]
-→ Confirmar: Yes
-```
-
-**4. Verificar que a permissão ficou aprovada**
-
-| Permissão | Tipo | Status |
-|-----------|------|--------|
-| `DeviceManagementConfiguration.ReadWrite.All` | Delegated | ✅ Granted for [tenant] |
-
-**5. Copiar os IDs**
-```
-Overview do app:
-  Application (client) ID  →  será o $clientId nos scripts
-  Directory (tenant) ID    →  será o $tenantId nos scripts
-```
-
-**6. Atualizar os scripts**
-
-Abra `Export-SecurityBaselines.ps1` e `Import-SecurityBaselines.ps1` e substitua:
-```powershell
-$clientId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Application (client) ID
-$tenantId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Directory (tenant) ID
-```
-
----
-
-### 📤 Export-SecurityBaselines.ps1
-
-Exporta os **Security Baseline templates** disponíveis no tenant para arquivos JSON organizados por categoria.
-
-#### O que faz
-
-1. Lista todos os Security Baseline templates do tenant
-2. Abre `Out-GridView` para seleção interativa
-3. Cria um perfil temporário para capturar os valores padrão recomendados pela Microsoft
-4. Salva JSON completo da baseline + JSONs individuais por categoria e configuração
-5. Remove o perfil temporário automaticamente
-
-#### Estrutura de pastas gerada
-
-```
-Exported-Baselines\
-  Security Baseline for Windows 10 and later - Version 25H2\
-    Security Baseline for Windows 10 and later - Version 25H2.json   ← baseline completa
-    Auditing\
-      001 - Audit Account Logon\
-        Audit Account Logon.json
-    Defender\
-      001 - Allow Archive Scanning\
-        Allow Archive Scanning.json
-      002 - Allow Behavior Monitoring\
-        Allow Behavior Monitoring.json
-    Firewall\
-      001 - Enable Domain Network\
-        Enable Domain Network.json
-      002 - Enable Private Network\
-      003 - Enable Public Network\
-    ...
-```
-
-#### Como usar
-
-```powershell
-# Exportar para pasta padrão (.\Exported-Baselines\<timestamp>)
-.\Export-SecurityBaselines.ps1
-
-# Exportar para pasta específica
-.\Export-SecurityBaselines.ps1 -OutputPath "C:\Backup\Baselines"
-
-# Informar UPN (pula digitação no login)
-.\Export-SecurityBaselines.ps1 -AdminUPN "admin@contoso.com"
-```
-
-#### Parâmetros
-
-| Parâmetro | Padrão | Descrição |
-|-----------|--------|-----------|
-| `-OutputPath` | `.\Exported-Baselines\<timestamp>` | Pasta de destino dos arquivos JSON |
-| `-AdminUPN` | *(vazio)* | UPN do administrador (hint de login) |
-
-#### Autenticação
-
-Ao iniciar, o script pergunta o método de autenticação:
-
-```
-  Escolha o método de autenticação:
-  [1] Device code  (abre navegador com código)
-  [2] Usuário e senha
-  Opção (1 ou 2):
-```
-
-- **[1] Device code** — abre `https://microsoft.com/devicelogin` no navegador com código temporário. Funciona com MFA.
-- **[2] Usuário e senha** — digita UPN e senha direto no terminal (ROPC flow). **Não funciona com MFA obrigatório.**
-
----
-
-### 📥 Import-SecurityBaselines.ps1
-
-Importa Security Baselines para o tenant a partir de JSONs exportados previamente.
-
-#### O que faz
-
-1. Busca recursivamente arquivos `.json` na pasta indicada
-2. Apresenta `Out-GridView` com colunas Categoria, Configuração, Template, Settings e Arquivo
-3. **Agrupa settings da mesma categoria** e pergunta se deseja unir em uma única política
-4. Permite **renomear** cada política antes de importar
-5. Verifica duplicatas e suporta sobrescrita com `-OverwriteExisting`
-6. Suporta atribuição automática a grupo do Entra ID
-
-#### Fluxo interativo
-
-```
-  Categoria  : Firewall
-  Template   : Security Baseline for Windows 10 and later (Version 25H2)
-  Settings   : 3 selecionadas:
-    - Enable Domain Network
-    - Enable Private Network
-    - Enable Public Network
-
-  Unir em UMA política? (S/N): S
-  Nome padrão: Security Baseline ... - Version 25H2 - Firewall
-  Nome da política (Enter para manter): Firewall - Configurações de Rede
-
-  Políticas a criar: 1
-  Continuar com a importação? (Y/N): Y
-```
-
-#### Como usar
-
-```powershell
-# Importar como Security Baseline (aparece em Endpoint Security → Security Baselines)
-.\Import-SecurityBaselines.ps1 -KeepAsBaseline
-
-# Importar como Settings Catalog (aparece em Devices → Configuration)
-.\Import-SecurityBaselines.ps1
-
-# Pasta específica + atribuir a grupo
-.\Import-SecurityBaselines.ps1 -SourcePath "C:\Baselines" `
-    -GroupAssignmentId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" `
-    -KeepAsBaseline
-
-# Sobrescrever políticas existentes com o mesmo nome
-.\Import-SecurityBaselines.ps1 -KeepAsBaseline -OverwriteExisting
-```
-
-#### Parâmetros
-
-| Parâmetro | Padrão | Descrição |
-|-----------|--------|-----------|
-| `-SourcePath` | Pasta atual | Pasta com os JSONs (busca recursiva) |
-| `-GroupAssignmentId` | *(vazio)* | Object ID do grupo para atribuição automática |
-| `-AdminUPN` | *(vazio)* | UPN do administrador (hint de login) |
-| `-KeepAsBaseline` | não | Preserva vínculo com o Security Baseline template |
-| `-OverwriteExisting` | não | Deleta e recria políticas com nome idêntico |
-
-> ✅ **Dica:** Use `-KeepAsBaseline` para que as políticas apareçam em **Endpoint Security → Security Baselines** no Intune, com o indicador de versão e conformidade com o template da Microsoft.
-
----
-
-### 📄 Logs e Arquivos de Debug
-
-Todos os arquivos de log são salvos na **mesma pasta do script**:
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `Export-SecurityBaselines.log` | Log completo da exportação |
-| `Import-SecurityBaselines.log` | Log completo da importação |
-| `DEBUG_settingTemplates_*.json` | Raw dos templates da API (pode apagar após uso) |
-| `DEBUG_converted_*.json` | Settings convertidas antes do POST (pode apagar após uso) |
-
-</details>
 
 ---
 
@@ -316,11 +34,6 @@ Todos os arquivos de log são salvos na **mesma pasta do script**:
 <!-- ████████████████████████████████████████████████████████████ -->
 
 ## 🇺🇸 English Documentation
-
-<details>
-<summary><strong>Expand English documentation</strong></summary>
-
-<br/>
 
 ### 📌 What are Security Baselines in Intune?
 
@@ -587,7 +300,280 @@ All log files are saved in the **same folder as the script**:
 | `DEBUG_settingTemplates_*.json` | Raw API template data (can be deleted after use) |
 | `DEBUG_converted_*.json` | Converted settings before POST (can be deleted after use) |
 
-</details>
+---
+
+<br/>
+
+<!-- ████████████████████████████████████████████████████████████ -->
+<!--                   PORTUGUÊS                                   -->
+<!-- ████████████████████████████████████████████████████████████ -->
+
+## 🇧🇷 Documentação em Português
+
+### 📌 O que são Security Baselines no Intune?
+
+As **Security Baselines** (Linhas de Base de Segurança) do Microsoft Intune são conjuntos pré-configurados de definições de segurança recomendadas pela Microsoft para dispositivos Windows. Elas agrupam centenas de configurações de segurança em um único perfil, baseadas nas melhores práticas da equipe de segurança da Microsoft, do CIS (Center for Internet Security) e do NIST (National Institute of Standards and Technology).
+
+> **O que a Microsoft diz:**
+> *"Security baselines are pre-configured groups of Windows settings that help you apply and enforce granular security settings that the relevant security teams recommend. You can also customize each baseline you deploy to enforce only those settings and values you require."*
+> — [Microsoft Learn – Security baselines in Intune](https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines)
+
+#### Por que é tão importante configurar?
+
+| Motivo | Impacto |
+|--------|---------|
+| 🔒 **Redução de superfície de ataque** | Desativa funcionalidades desnecessárias e potencialmente exploráveis |
+| 🏛️ **Conformidade regulatória** | Auxilia no atendimento a LGPD, ISO 27001, NIST, CIS Benchmarks |
+| ⚡ **Velocidade de implantação** | Em vez de configurar centenas de GPOs manualmente, uma baseline cobre tudo |
+| 🧩 **Padronização** | Garante que todos os dispositivos do tenant sigam o mesmo padrão mínimo de segurança |
+| 🔁 **Atualizações da Microsoft** | A cada nova versão do Windows, a Microsoft publica uma nova baseline com as proteções mais recentes |
+| 🛡️ **Proteção contra ameaças comuns** | Habilita Defender Antivirus, configura Firewall, restringe execução de scripts, bloqueia protocolos inseguros |
+
+#### O que as baselines cobrem?
+
+As Security Baselines do Windows abrangem áreas como:
+
+- **Microsoft Defender Antivirus** — proteção em tempo real, varredura, quarentena
+- **Firewall do Windows** — regras para redes de domínio, privadas e públicas
+- **BitLocker** — criptografia de disco completo
+- **Windows Hello** — autenticação sem senha e biometria
+- **Auditoria e logs** — rastreamento de eventos de logon, alterações de conta, uso de privilégios
+- **Internet Explorer / Microsoft Edge** — hardening de navegador
+- **Credenciais e senhas** — complexidade, expiração, bloqueio de conta
+- **Controle de Conta de Usuário (UAC)** — elevação de privilégios
+- **Windows Update** — políticas de atualização automática
+
+> 💡 A Microsoft recomenda começar com as Security Baselines e depois ajustar as configurações conforme as necessidades específicas da organização, em vez de criar políticas do zero.
+
+---
+
+### 📋 Visão Geral dos Scripts
+
+Este projeto fornece dois scripts PowerShell para exportar e importar Security Baselines do Microsoft Intune via **Microsoft Graph REST API** — sem necessidade do módulo Microsoft.Graph SDK. Isso resolve conflitos de versão de assembly MSAL comuns em ambientes com múltiplos módulos PowerShell instalados.
+
+**Funcionalidades:**
+- ✅ Autenticação por Device Code ou usuário/senha (ROPC)
+- ✅ Exporta por categoria (Defender, Firewall, Auditing, etc.)
+- ✅ Importa com seleção interativa via `Out-GridView`
+- ✅ Permite unir settings da mesma categoria em uma única política
+- ✅ Permite renomear cada política antes de importar
+- ✅ Suporte a atribuição automática de grupos
+- ✅ Logs detalhados na pasta do script
+
+---
+
+### ⚙️ Pré-requisitos
+
+- PowerShell **7.0 ou superior**
+- Acesso ao **Microsoft Entra ID** para registrar um aplicativo
+- Conta com permissão **DeviceManagementConfiguration.ReadWrite.All** no tenant
+- Windows com acesso à internet
+
+---
+
+### 🔐 Registro do Aplicativo no Entra ID
+
+É necessário registrar um aplicativo próprio no Entra ID para obter um `$clientId` e `$tenantId` a configurar nos scripts.
+
+> ⚠️ **Não use** o clientId genérico do *Microsoft Graph Command Line Tools* (`14d82eec-...`). Políticas de Conditional Access podem bloqueá-lo em dispositivos não gerenciados com o erro **530033**.
+
+#### Passo a passo
+
+**1. Criar o registro do app**
+```
+Entra ID → App registrations → New registration
+  Nome: Intune Baselines Script
+  Tipo de conta: Accounts in this organizational directory only (Single tenant)
+  Redirect URI: (deixar em branco)
+  → Register
+```
+
+**2. Habilitar Public Client (para Device Code funcionar)**
+```
+Authentication → Add a platform → Mobile and desktop applications
+  ✅ https://login.microsoftonline.com/common/oauth2/nativeclient
+
+Advanced settings:
+  Allow public client flows → Yes
+  → Save
+```
+
+**3. Adicionar permissão delegada**
+```
+API permissions → Add a permission → Microsoft Graph → Delegated permissions
+  Buscar e selecionar: DeviceManagementConfiguration.ReadWrite.All
+  → Add permissions
+
+→ Grant admin consent for [seu tenant]
+→ Confirmar: Yes
+```
+
+**4. Verificar que a permissão ficou aprovada**
+
+| Permissão | Tipo | Status |
+|-----------|------|--------|
+| `DeviceManagementConfiguration.ReadWrite.All` | Delegated | ✅ Granted for [tenant] |
+
+**5. Copiar os IDs**
+```
+Overview do app:
+  Application (client) ID  →  será o $clientId nos scripts
+  Directory (tenant) ID    →  será o $tenantId nos scripts
+```
+
+**6. Atualizar os scripts**
+
+Abra `Export-SecurityBaselines.ps1` e `Import-SecurityBaselines.ps1` e substitua:
+```powershell
+$clientId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Application (client) ID
+$tenantId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Directory (tenant) ID
+```
+
+---
+
+### 📤 Export-SecurityBaselines.ps1
+
+Exporta os **Security Baseline templates** disponíveis no tenant para arquivos JSON organizados por categoria.
+
+#### O que faz
+
+1. Lista todos os Security Baseline templates do tenant
+2. Abre `Out-GridView` para seleção interativa
+3. Cria um perfil temporário para capturar os valores padrão recomendados pela Microsoft
+4. Salva JSON completo da baseline + JSONs individuais por categoria e configuração
+5. Remove o perfil temporário automaticamente
+
+#### Estrutura de pastas gerada
+
+```
+Exported-Baselines\
+  Security Baseline for Windows 10 and later - Version 25H2\
+    Security Baseline for Windows 10 and later - Version 25H2.json   ← baseline completa
+    Auditing\
+      001 - Audit Account Logon\
+        Audit Account Logon.json
+    Defender\
+      001 - Allow Archive Scanning\
+        Allow Archive Scanning.json
+      002 - Allow Behavior Monitoring\
+        Allow Behavior Monitoring.json
+    Firewall\
+      001 - Enable Domain Network\
+        Enable Domain Network.json
+      002 - Enable Private Network\
+      003 - Enable Public Network\
+    ...
+```
+
+#### Como usar
+
+```powershell
+# Exportar para pasta padrão (.\Exported-Baselines\<timestamp>)
+.\Export-SecurityBaselines.ps1
+
+# Exportar para pasta específica
+.\Export-SecurityBaselines.ps1 -OutputPath "C:\Backup\Baselines"
+
+# Informar UPN (pula digitação no login)
+.\Export-SecurityBaselines.ps1 -AdminUPN "admin@contoso.com"
+```
+
+#### Parâmetros
+
+| Parâmetro | Padrão | Descrição |
+|-----------|--------|-----------|
+| `-OutputPath` | `.\Exported-Baselines\<timestamp>` | Pasta de destino dos arquivos JSON |
+| `-AdminUPN` | *(vazio)* | UPN do administrador (hint de login) |
+
+#### Autenticação
+
+Ao iniciar, o script pergunta o método de autenticação:
+
+```
+  Escolha o método de autenticação:
+  [1] Device code  (abre navegador com código)
+  [2] Usuário e senha
+  Opção (1 ou 2):
+```
+
+- **[1] Device code** — abre `https://microsoft.com/devicelogin` no navegador com código temporário. Funciona com MFA.
+- **[2] Usuário e senha** — digita UPN e senha direto no terminal (ROPC flow). **Não funciona com MFA obrigatório.**
+
+---
+
+### 📥 Import-SecurityBaselines.ps1
+
+Importa Security Baselines para o tenant a partir de JSONs exportados previamente.
+
+#### O que faz
+
+1. Busca recursivamente arquivos `.json` na pasta indicada
+2. Apresenta `Out-GridView` com colunas Categoria, Configuração, Template, Settings e Arquivo
+3. **Agrupa settings da mesma categoria** e pergunta se deseja unir em uma única política
+4. Permite **renomear** cada política antes de importar
+5. Verifica duplicatas e suporta sobrescrita com `-OverwriteExisting`
+6. Suporta atribuição automática a grupo do Entra ID
+
+#### Fluxo interativo
+
+```
+  Categoria  : Firewall
+  Template   : Security Baseline for Windows 10 and later (Version 25H2)
+  Settings   : 3 selecionadas:
+    - Enable Domain Network
+    - Enable Private Network
+    - Enable Public Network
+
+  Unir em UMA política? (S/N): S
+  Nome padrão: Security Baseline ... - Version 25H2 - Firewall
+  Nome da política (Enter para manter): Firewall - Configurações de Rede
+
+  Políticas a criar: 1
+  Continuar com a importação? (Y/N): Y
+```
+
+#### Como usar
+
+```powershell
+# Importar como Security Baseline (aparece em Endpoint Security → Security Baselines)
+.\Import-SecurityBaselines.ps1 -KeepAsBaseline
+
+# Importar como Settings Catalog (aparece em Devices → Configuration)
+.\Import-SecurityBaselines.ps1
+
+# Pasta específica + atribuir a grupo
+.\Import-SecurityBaselines.ps1 -SourcePath "C:\Baselines" `
+    -GroupAssignmentId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" `
+    -KeepAsBaseline
+
+# Sobrescrever políticas existentes com o mesmo nome
+.\Import-SecurityBaselines.ps1 -KeepAsBaseline -OverwriteExisting
+```
+
+#### Parâmetros
+
+| Parâmetro | Padrão | Descrição |
+|-----------|--------|-----------|
+| `-SourcePath` | Pasta atual | Pasta com os JSONs (busca recursiva) |
+| `-GroupAssignmentId` | *(vazio)* | Object ID do grupo para atribuição automática |
+| `-AdminUPN` | *(vazio)* | UPN do administrador (hint de login) |
+| `-KeepAsBaseline` | não | Preserva vínculo com o Security Baseline template |
+| `-OverwriteExisting` | não | Deleta e recria políticas com nome idêntico |
+
+> ✅ **Dica:** Use `-KeepAsBaseline` para que as políticas apareçam em **Endpoint Security → Security Baselines** no Intune, com o indicador de versão e conformidade com o template da Microsoft.
+
+---
+
+### 📄 Logs e Arquivos de Debug
+
+Todos os arquivos de log são salvos na **mesma pasta do script**:
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `Export-SecurityBaselines.log` | Log completo da exportação |
+| `Import-SecurityBaselines.log` | Log completo da importação |
+| `DEBUG_settingTemplates_*.json` | Raw dos templates da API (pode apagar após uso) |
+| `DEBUG_converted_*.json` | Settings convertidas antes do POST (pode apagar após uso) |
 
 ---
 
